@@ -7,22 +7,27 @@
 
 import SwiftUI
 
+var erroring: Bool = false
+
 struct ContentView: View {
+    @State var url: String = ""
+    @ObservedObject var fetch = FetchSubjects("")
     var body: some View {
         NavigationView {
-            MainBody()
+            MainBody(fetch: fetch, url: self.$url)
         }.navigationViewStyle(StackNavigationViewStyle())
         
     }
 }
 
 struct MainBody: View {
-    @ObservedObject var fetch = FetchSubjects("")
-    @State private var showSettings = false
-    @State private var url: String = ""
+    @ObservedObject var fetch: FetchSubjects
+    @State var showSettings = false
+    @Binding var url: String
+    @State var connErr = false
     var body: some View {
         List(fetch.subjects) { item in
-            SubjectRow(subject: item)
+            SubjectRow(fetch: fetch, subject: item, url: self.$url)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -33,32 +38,48 @@ struct MainBody: View {
                 }
             }
         }
-        .popover(isPresented: $showSettings) {
-            Spacer()
-            Text("Settings").font(.title)
-            Spacer()
-            Text("Enter a URL to pull data from!")
-            TextField("URL", text: $url)
-            Button(action: {
-                fetch.fetchURL(URL.init(string: url)!)
-            }, label: {
-                Text("Check now!")
-            })
-            Spacer()
-            Button(action: {
-                    self.showSettings = false
-                
-            }, label: {
-                Text("OK")
-            })
-            Spacer()
-        }
+        .popover(isPresented: $showSettings, attachmentAnchor: .point(UnitPoint.bottom), arrowEdge: .top, content: {
+            VStack {
+                Spacer()
+                Text("Settings").font(.title)
+                Spacer()
+                Text("Enter a URL to pull data from!")
+                TextField("URL", text: $url)
+                Button(action: {
+                    if (url != "") {
+                        fetch.fetchURL(URL.init(string: url)!)
+                    } else {
+                        UserDefaults.standard.integer(forKey: "json")
+                    }
+                }, label: {
+                    Text("Check now!")
+                })
+                Spacer()
+                Button(action: {
+                        self.showSettings = false
+                    
+                }, label: {
+                    Text("OK")
+                })
+                Spacer()
+            }.padding(20)
+        })
+        .alert(isPresented: $connErr, content: {
+                Alert(title: Text("Download Issues"),
+                      message: Text("There was an issue with your connection, or the URL you gave. Please check them, and try again. In the meantime, we will load some quizzes you've already uploaded, if you've used iQuiz before."),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
+        )
     }
 }
 
 
+
 class FetchSubjects: ObservableObject {
     @Published var subjects = [Subject]()
+//    @Published var hasError: Bool = erroring
+//    @State var isError: Bool = false
     init(_ urlStr: String) {
         var url: URL
         if (urlStr == "") {
@@ -70,24 +91,44 @@ class FetchSubjects: ObservableObject {
     }
     
     func fetchURL(_ url: URL) {
-        print(url)
         URLSession.shared.dataTask(with: url, completionHandler: {(data, response, error) in
+            if (error != nil || data == nil) {
+//                self.hasError = true
+//                erroring = true
+                print(error!)
+            }
             do {
                 let responseText = String.init(data: data!, encoding: .ascii)!
-                print(responseText)
+//                print(responseText)
                 let jsonData = responseText.data(using: .utf8)!
                 let decoder = JSONDecoder()
                 let decodedData = try decoder.decode([Subject].self, from: jsonData)
                 DispatchQueue.main.async {
-                    self.subjects = decodedData
-//                    print(decodedData)
-                    UserDefaults.standard.set(jsonData, forKey: "json")
+                        self.subjects = decodedData
+    //                    print(decodedData)
+                        UserDefaults.standard.set(jsonData, forKey: "json")
                 }
             }
             catch {
+//                erroring = true
                 print(error)
             }
         }).resume()
+//        if (self.hasError) {
+            do {
+                let jsonData = UserDefaults.standard.object(forKey: "json") as! Data
+                let decoder = JSONDecoder()
+                let decodedData = try decoder.decode([Subject].self, from: jsonData)
+                DispatchQueue.main.async {
+                        self.subjects = decodedData
+    //                    print(decodedData)
+                }
+            }
+            catch {
+//                erroring = true
+                print(error)
+            }
+//        }
     }
 }
 
@@ -134,9 +175,11 @@ struct Question: Decodable {
 }
 
 struct SubjectRow: View {
+    @ObservedObject var fetch: FetchSubjects
     let subject: Subject
+    @Binding var url: String
     var body: some View {
-        NavigationLink(destination: QuestionPage(questions: subject.questions, curr: 0, currQuestion: subject.questions[0], correct: 0)) {
+        NavigationLink(destination: QuestionPage(fetch: fetch, questions: subject.questions, curr: 0, currQuestion: subject.questions[0], correct: 0, url: self.$url)) {
             HStack {
                 Image(systemName: "pencil.and.outline")
                     .font(.largeTitle)
@@ -153,11 +196,13 @@ struct SubjectRow: View {
 }
 
 struct QuestionPage: View {
+    @ObservedObject var fetch: FetchSubjects
     var questions: [Question]
     var curr: Int
     var currQuestion: Question
     var correct: Int
     @State var selectedAnswer = 0
+    @Binding var url: String
     var body: some View {
         VStack {
             Spacer()
@@ -176,11 +221,13 @@ struct QuestionPage: View {
             Spacer()
             HStack {
                 Spacer()
-                NavigationLink(destination: AnswerPage(questions: questions,
+                NavigationLink(destination: AnswerPage(fetch: fetch,
+                                                       questions: questions,
                                                        curr: curr,
                                                        currQuestion: questions[curr],
                                                        correct: correct,
-                                                       selectedAnswer: selectedAnswer)) {
+                                                       selectedAnswer: selectedAnswer,
+                                                       url: self.$url)) {
                     Text("Next")
                 }
                 .navigationBarTitle("Question " + String(curr + 1))
@@ -192,11 +239,13 @@ struct QuestionPage: View {
 
 
 struct AnswerPage: View {
+    @ObservedObject var fetch: FetchSubjects
     var questions: [Question]
     var curr: Int
     var currQuestion: Question
     var correct: Int
     var selectedAnswer: Int
+    @Binding var url: String
     var body: some View {
         VStack {
             Spacer()
@@ -214,16 +263,18 @@ struct AnswerPage: View {
             HStack {
                 Spacer()
                 if (curr == questions.count - 1) {
-                    NavigationLink(destination: FinalPage(questions: questions, correct: correct + selectedAnswer)) {
+                    NavigationLink(destination: FinalPage(fetch: fetch, questions: questions, correct: correct + selectedAnswer, url: self.$url)) {
                         Text("Next")
                     }
                     .navigationBarTitle("Answer " + String(curr + 1))
                     .padding(20)
                 } else {
-                    NavigationLink(destination: QuestionPage(questions: questions,
+                    NavigationLink(destination: QuestionPage(fetch: fetch,
+                                                             questions: questions,
                                                              curr: curr + 1,
                                                              currQuestion: questions[curr + 1],
-                                                             correct: correct + selectedAnswer)) {
+                                                             correct: correct + selectedAnswer,
+                                                             url: self.$url)) {
                         Text("Next")
                     }
                     .navigationBarTitle("Answer " + String(curr + 1))
@@ -235,8 +286,10 @@ struct AnswerPage: View {
 }
 
 struct FinalPage: View {
+    @ObservedObject var fetch: FetchSubjects
     var questions: [Question]
     var correct: Int
+    @Binding var url: String
     var body: some View {
         Spacer()
         if questions.count == correct{
@@ -251,7 +304,7 @@ struct FinalPage: View {
         Spacer()
         HStack {
             Spacer()
-            NavigationLink(destination: MainBody(),
+            NavigationLink(destination: MainBody(fetch: fetch, url: self.$url),
                    label:{Text("Back to Home")})
                 .navigationBarTitle("Finished")
             .padding(20)
