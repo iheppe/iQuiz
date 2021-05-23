@@ -1,0 +1,82 @@
+[{
+  "title": "Mathematics",
+  "desc": "Quizzes on numbers that do cool stuff!",
+  "questions": [{
+      "text": "What is 1 + 1?",
+      "answer": "2",
+      "answers": [
+        "0", "2", "1", "-1"
+      ]
+    },
+    {
+      "text": "Bobby has 10 apples. He eats 5 of them, and gives one away. How many does he have left?",
+      "answer": "4",
+      "answers": [
+        "5", "10", "6", "4"
+      ]
+    },
+    {
+      "text": "What is NOT a type of triangle?",
+      "answer": "3",
+      "answers": ["Right", "Isosceles", "Cute", "Scalene"]
+    }
+  ]
+},
+{
+  "title": "Marvel Super Heroes",
+  "desc": "Quizzes on comic book and movie characters!",
+  "questions": [{
+      "text": "Who is the first Avenger?",
+      "answer": "1",
+      "answers": [
+        "Captain America", "The Hulk", "Thor", "Iron Man"
+      ]
+    },
+    {
+      "text": "Who founded the X-Men?",
+      "answer": "2",
+      "answers": [
+        "Tony Stark",
+        "Professor X",
+        "The X-Institute",
+        "Erik Lensherr"
+      ]
+    },
+    {
+      "text": "How did Spider-Man get his powers?",
+      "answer": "1",
+      "answers": [
+        "He was bitten by a radioactive spider",
+        "He ate a radioactive spider",
+        "He is a radioactive spider",
+        "He looked at a radioactive spider"
+      ]
+    }
+  ]
+},
+{
+  "title": "Science",
+  "desc": "Quizzes on the elements of the universe!",
+  "questions": [{
+      "text": "What’s the first element in the periodic table?",
+      "answer": "4",
+      "answers": ["Helium", "Carbon", "Oxygen", "Hydrogen"]
+    },
+    {
+      "text": "What is Newton’s third law of motion?",
+      "answer": "3",
+      "answers": ["An object will only ever move down.", "Everything remains in a persistent state of motion until acted on", "For every action, there is an equal and opposite reaction", "Gravity is great!"]
+    },
+    {
+      "text": "What is the powerhouse of the cell?",
+      "answer": "2",
+      "answers": [
+        "Smooth endoplasmic reticulum",
+        "Mitochondria",
+        "Nucleolus",
+        "Golgi apparatus"
+      ]
+    }
+  ]
+}
+]

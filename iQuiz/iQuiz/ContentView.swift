@@ -17,74 +17,120 @@ struct ContentView: View {
 }
 
 struct MainBody: View {
-    let subjects = [
-        Subject(name: "Mathematics", desc: "Quizzes on numbers that do cool stuff!", icon: "x.squareroot",
-                questions: [Question("What is 1 + 1?", 1, ["0", "2", "1", "-1"]),
-                            Question("Bobby has 10 apples. He eats 5 of them, and gives one away. How many does he have left?", 3, ["5", "10", "6", "4"]),
-                            Question("What is NOT a type of triangle?", 2,["Right", "Isosceles", "Cute", "Scalene"])
-                ]
-        ),
-        Subject(name: "Marvel Super Heroes", desc: "Quizzes on comic book and movie characters!", icon: "bolt.circle",
-                questions: [Question("Who is the first Avenger?", 0, ["Captain America", "The Hulk", "Thor", "Iron Man"])
-                ]
-        ),
-        Subject(name: "Science", desc: "Quizzes on the elements of the universe!", icon: "leaf.arrow.circlepath",
-                questions: [Question("What's the first element in the periodic table?", 3, ["Helium", "Oxygen", "Carbon", "Hydrogen"]),
-                            Question("What is Newton's third law of motion?", 2, ["An object will only ever move down.", "Everything remains in a persistent state of motion until acted on","For every action, there is an equal and opposite reaction", "Gravity is great!"]),
-                            Question("What is the powerhouse of the cell?", 1, ["Smooth endoplasmic reticulum", "Mitochondria", "Nucleolus", "Golgi apparatus"])])]
-    @State private var showAlert = false
+    @ObservedObject var fetch = FetchSubjects("")
+    @State private var showSettings = false
+    @State private var url: String = ""
     var body: some View {
-        List(subjects) { item in
+        List(fetch.subjects) { item in
             SubjectRow(subject: item)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
-                    self.showAlert = true
+                    self.showSettings = true
                 }) {
                     Image(systemName: "gear")
                 }
             }
         }
-        .alert(
-            isPresented: $showAlert,
-            content: {
-                Alert(title: Text("Settings"),
-                    message: Text("Settings go here"),
-                    dismissButton: .default(Text("OK"))) }
-        )
+        .popover(isPresented: $showSettings) {
+            Spacer()
+            Text("Settings").font(.title)
+            Spacer()
+            Text("Enter a URL to pull data from!")
+            TextField("URL", text: $url)
+            Button(action: {
+                fetch.fetchURL(URL.init(string: url)!)
+            }, label: {
+                Text("Check now!")
+            })
+            Spacer()
+            Button(action: {
+                    self.showSettings = false
+                
+            }, label: {
+                Text("OK")
+            })
+            Spacer()
+        }
     }
 }
 
-struct Subject: Identifiable {
+
+class FetchSubjects: ObservableObject {
+    @Published var subjects = [Subject]()
+    init(_ urlStr: String) {
+        var url: URL
+        if (urlStr == "") {
+            url = URL.init(string: "http://tednewardsandbox.site44.com/questions.json")!
+        } else {
+            url = URL.init(string: urlStr)!
+        }
+        fetchURL(url)
+    }
+    
+    func fetchURL(_ url: URL) {
+        print(url)
+        URLSession.shared.dataTask(with: url, completionHandler: {(data, response, error) in
+            do {
+                let responseText = String.init(data: data!, encoding: .ascii)!
+                print(responseText)
+                let jsonData = responseText.data(using: .utf8)!
+                let decoder = JSONDecoder()
+                let decodedData = try decoder.decode([Subject].self, from: jsonData)
+                DispatchQueue.main.async {
+                    self.subjects = decodedData
+//                    print(decodedData)
+                    UserDefaults.standard.set(jsonData, forKey: "json")
+                }
+            }
+            catch {
+                print(error)
+            }
+        }).resume()
+    }
+}
+
+struct Subject: Decodable, Identifiable {
     let id = UUID()
-    let name: String
+    let title: String
     let desc: String
-    let icon: String
-    var questions: [Question]
+    var questions: [Question] = []
     
-    init(name: String, desc: String, icon: String, questions: [Question]) {
-        self.name = name
-        self.desc = desc
-        self.icon = icon
-        self.questions = questions
+    enum SubjectKeys: String, CodingKey {
+        case title
+        case desc
+        case questions
     }
-    
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: SubjectKeys.self)
+        title = try container.decode(String.self, forKey: .title)
+        desc = try container.decode(String.self, forKey: .desc)
+        questions = try container.decode([Question].self, forKey: .questions)
+    }
+
+
 }
 
-struct Question: Identifiable {
+struct Question: Decodable {
     let id = UUID()
-    let question: String
-    let correct: Int
+    let text: String
+    let answer: String
     let answers: [String]
     
-    init(_ question: String, _ correct: Int, _ answers: [String]) {
-        self.question = question
-        self.correct = correct
-        self.answers = answers
+    enum QuestionKeys: String, CodingKey {
+        case text
+        case answer
+        case answers
     }
     
-    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: QuestionKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        answer = try container.decode(String.self, forKey: .answer)
+        answers = try container.decode([String].self, forKey: .answers)
+    }
 }
 
 struct SubjectRow: View {
@@ -92,10 +138,10 @@ struct SubjectRow: View {
     var body: some View {
         NavigationLink(destination: QuestionPage(questions: subject.questions, curr: 0, currQuestion: subject.questions[0], correct: 0)) {
             HStack {
-                Image(systemName: subject.icon)
+                Image(systemName: "pencil.and.outline")
                     .font(.largeTitle)
                 VStack (alignment: .leading, spacing: 5) {
-                    Text(subject.name)
+                    Text(subject.title)
                         .font(.body)
                     Text(subject.desc)
                         .font(.caption)
@@ -115,11 +161,11 @@ struct QuestionPage: View {
     var body: some View {
         VStack {
             Spacer()
-            Text(currQuestion.question)
+            Text(currQuestion.text)
             Spacer()
             ForEach(currQuestion.answers.indices) { i in
                 Button(action: {
-                    if (i == currQuestion.correct) {
+                    if (i + 1 == Int(currQuestion.answer)!) {
                         selectedAnswer = 1
                     } else {
                         selectedAnswer = 0
@@ -154,9 +200,9 @@ struct AnswerPage: View {
     var body: some View {
         VStack {
             Spacer()
-            Text(currQuestion.question)
+            Text(currQuestion.text)
             Spacer()
-            Text(currQuestion.answers[currQuestion.correct])
+            Text(currQuestion.answers[Int(currQuestion.answer)! - 1])
             Spacer()
             if (selectedAnswer == 1) {
                 Text("You got it correct!")
@@ -220,3 +266,20 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
+
+
+//    let subjects = [
+//        Subject(name: "Mathematics", desc: "Quizzes on numbers that do cool stuff!", icon: "x.squareroot",
+//                questions: [Question("What is 1 + 1?", 1, ["0", "2", "1", "-1"]),
+//                            Question("Bobby has 10 apples. He eats 5 of them, and gives one away. How many does he have left?", 3, ["5", "10", "6", "4"]),
+//                            Question("What is NOT a type of triangle?", 2,["Right", "Isosceles", "Cute", "Scalene"])
+//                ]
+//        ),
+//        Subject(name: "Marvel Super Heroes", desc: "Quizzes on comic book and movie characters!", icon: "bolt.circle",
+//                questions: [Question("Who is the first Avenger?", 0, ["Captain America", "The Hulk", "Thor", "Iron Man"])
+//                ]
+//        ),
+//        Subject(name: "Science", desc: "Quizzes on the elements of the universe!", icon: "leaf.arrow.circlepath",
+//                questions: [Question("What's the first element in the periodic table?", 3, ["Helium", "Oxygen", "Carbon", "Hydrogen"]),
+//                            Question("What is Newton's third law of motion?", 2, ["An object will only ever move down.", "Everything remains in a persistent state of motion until acted on","For every action, there is an equal and opposite reaction", "Gravity is great!"]),
+//                            Question("What is the powerhouse of the cell?", 1, ["Smooth endoplasmic reticulum", "Mitochondria", "Nucleolus", "Golgi apparatus"])])]

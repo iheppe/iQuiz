@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Dumb Questions",
+    "desc": "dummy",
+    "questions": [{
+        "text": "What’s the first letter in the alphabet?",
+        "answer": "4",
+        "answers": ["z", "y", "w", "a"]
+      }
+    ]
+  }
+]
